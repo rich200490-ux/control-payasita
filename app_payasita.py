@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # 🇨🇷 REEMPLAZA ESTE ENLACE CON EL DE TU GOOGLE SHEETS COMCO EDITOR:
-URL_HOJA = "TU_ENLACE_AQUI"
+URL_HOJA = "https://docs.google.com/spreadsheets/d/1QRARANsc0D3AKoHqdpssEOdx-OmGgU3dGOWXXw1PRwQ/edit?usp=sharing"
 
 # Función para convertir el enlace normal en un enlace de descarga directa de datos
 def obtener_url_csv(sheet_name):
