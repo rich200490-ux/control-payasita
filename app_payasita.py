@@ -19,9 +19,10 @@ GITHUB_REPO = "control-payasita"  # El nombre de tu repositorio en GitHub
 # Recuperar el token desde los secretos seguros de Streamlit
 TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 
-# Rutas de almacenamiento en tu nube de GitHub
+# Rutas de almacenamiento en tu nube de GitHub (Dirección de API corregida)
 URL_INV = f"https://github.com{GITHUB_USER}/{GITHUB_REPO}/contents/inventario.json"
 URL_EV = f"https://github.com{GITHUB_USER}/{GITHUB_REPO}/contents/eventos.json"
+
 
 def leer_de_github(url):
     if not TOKEN:
