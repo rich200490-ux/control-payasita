@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # 🛠️ DATOS DE TU CONFIGURACIÓN DE GITHUB (ESCRIBE LOS TUYOS AQUÍ):
-GITHUB_USER = "rich200490-ux"
+GITHUB_USER = "@rich200490-ux"
 GITHUB_REPO = "control-payasita"  # El nombre de tu repositorio en GitHub
 
 # Recuperar el token desde los secretos seguros de Streamlit
