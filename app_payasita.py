@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # 🇨🇷 PONE AQUÍ TU ENLACE DE GOOGLE SHEETS (DEBE TENER PERMISO DE EDITOR)
-URL_HOJA = "https://docs.google.com/spreadsheets/d/1QRARANsc0D3AKoHqdpssEOdx-OmGgU3dGOWXXw1PRwQ/edit?gid=0#gid=0"
+URL_HOJA = "https://docs.google.com/spreadsheets/d/1FsYcovM-G5f2bJABw64Ef6VgkDx9ImI0maJ981NlC6Q/edit?gid=768933547#gid=768933547"
 
 # Truco maestro para convertir el enlace normal de compartir en un enlace que Python pueda leer y escribir directamente
 def obtener_url_csv(sheet_name):
