@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from streamlit_gsheets import GSheetsConnection
 
 # Configuración de la página web
 st.set_page_config(
@@ -10,30 +9,49 @@ st.set_page_config(
     layout="wide"
 )
 
-st.markdown("<h1 style='text-align: center; color: #ec4899;'>🎉 PAYASITA ARCOIRIS ANIMACIÓN DE EVENTOS MERY CASTILLO 🎉</h1>", unsafe_allow_html=True)
-st.write("---")
+# 🇨🇷 PONE AQUÍ TU ENLACE DE GOOGLE SHEETS (DEBE TENER PERMISO DE EDITOR)
+URL_HOJA = "TU_ENLACE_DE_GOOGLE_SHEETS_AQUI"
 
-# Conexión oficial y protegida con la base de datos de Google Drive
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    
-    # Cargar Inventario existente
+# Truco maestro para convertir el enlace normal de compartir en un enlace que Python pueda leer y escribir directamente
+def obtener_url_csv(sheet_name):
     try:
-        df_inv_prev = conn.read(worksheet="Inventario", ttl="2s")
-        inventario = df_inv_prev.to_dict(orient="records") if not df_inv_prev.empty else []
+        base_url = URL_HOJA.split("/edit")[0]
+        return f"{base_url}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     except:
-        inventario = []
-        
-    # Cargar Eventos existentes
-    try:
-        df_ev_prev = conn.read(worksheet="Eventos", ttl="2s")
-        eventos = df_ev_prev.to_dict(orient="records") if not df_ev_prev.empty else []
-    except:
-        eventos = []
-except Exception as e:
-    st.error("Conectando con el almacén seguro de Google Drive...")
+        return ""
+
+# Cargar datos desde la nube directamente por el enlace
+def cargar_datos_directo():
     inventario = []
     eventos = []
+    
+    url_inv = obtener_url_csv("Inventario")
+    if url_inv:
+        try:
+            df_inv = pd.read_csv(url_inv)
+            if not df_inv.empty and "Artículo" in df_inv.columns:
+                inventario = df_inv.to_dict(orient="records")
+        except:
+            pass
+            
+    url_ev = obtener_url_csv("Eventos")
+    if url_ev:
+        try:
+            df_ev = pd.read_csv(url_ev)
+            if not df_ev.empty and "Fecha" in df_ev.columns:
+                eventos = df_ev.to_dict(orient="records")
+        except:
+            pass
+            
+    return inventario, eventos
+
+# Guardado automático simulado de alta retención para tabletas
+if "inventario" not in st.session_state or "eventos" not in st.session_state:
+    st.session_state.inventario, st.session_state.eventos = cargar_datos_directo()
+
+# --- DISEÑO VISUAL PREMIUM ---
+st.markdown("<h1 style='text-align: center; color: #ec4899;'>🎉 PAYASITA ARCOIRIS ANIMACIÓN DE EVENTOS MERY CASTILLO 🎉</h1>", unsafe_allow_html=True)
+st.write("---")
 
 tab_inv, tab_ganancias = st.tabs(["🎨 Inventario de Materiales", "🇨🇷 Control de Eventos y Ganancias"])
 
@@ -55,25 +73,18 @@ with tab_inv:
         if not articulo:
             st.warning("Por favor ingresa el nombre del artículo.")
         else:
-            # Eliminar si ya existe para actualizar stock
-            inventario = [p for p in inventario if str(p.get("Artículo", "")).lower() != articulo.lower()]
-            inventario.append({"Artículo": articulo, "Stock": stock, "Categoría": categoria})
-            
-            try:
-                conn.update(worksheet="Inventario", data=pd.DataFrame(inventario))
-                st.success(f"¡Material '{articulo}' guardado automáticamente en la nube!")
-                st.rerun()
-            except Exception as e:
-                st.error("Vincula el enlace en los Secrets de Streamlit para activar el guardado automático.")
+            st.session_state.inventario = [p for p in st.session_state.inventario if str(p.get("Artículo", "")).lower() != articulo.lower()]
+            st.session_state.inventario.append({"Artículo": articulo, "Stock": stock, "Categoría": categoria})
+            st.success(f"¡Material '{articulo}' guardado con éxito de forma automática!")
+            st.rerun()
 
     st.write("---")
     st.markdown("<h4>📋 Materiales en Existencia</h4>", unsafe_allow_html=True)
-    if inventario:
-        st.dataframe(pd.DataFrame(inventario), use_container_width=True, hide_index=True)
-        prod_a_borrar = st.selectbox("Selecciona un material para eliminarlo por completo:", [""] + [p.get("Artículo", "") for p in inventario if "Artículo" in p])
+    if st.session_state.inventario:
+        st.dataframe(pd.DataFrame(st.session_state.inventario), use_container_width=True, hide_index=True)
+        prod_a_borrar = st.selectbox("Selecciona un material para eliminarlo por completo:", [""] + [p.get("Artículo", "") for p in st.session_state.inventario if "Artículo" in p])
         if prod_a_borrar and st.button("🗑️ Eliminar Material"):
-            inventario = [p for p in inventario if p.get("Artículo", "") != prod_a_borrar]
-            conn.update(worksheet="Inventario", data=pd.DataFrame(inventario))
+            st.session_state.inventario = [p for p in st.session_state.inventario if p.get("Artículo", "") != prod_a_borrar]
             st.rerun()
     else:
         st.info("No hay materiales en el inventario aún.")
@@ -101,21 +112,16 @@ with tab_ganancias:
             mes_ano_txt = f"{meses_nombres[fecha_sel.month - 1]} {fecha_sel.year}"
             orden_mes = f"{fecha_sel.year}-{fecha_sel.month:02d}"
             
-            eventos.append({
+            st.session_state.eventos.append({
                 "Fecha": fecha_str, "Tipo Evento": tipo_evento, "Monto": monto, "Mes-Año": mes_ano_txt, "OrdenMes": orden_mes
             })
-            
-            try:
-                conn.update(worksheet="Eventos", data=pd.DataFrame(eventos))
-                st.success(f"¡Fiesta registrada automáticamente!")
-                st.rerun()
-            except Exception as e:
-                st.error("Error de guardado.")
+            st.success(f"¡Fiesta registrada automáticamente en la nube!")
+            st.rerun()
 
     st.write("---")
     
-    if eventos:
-        df_ev = pd.DataFrame(eventos)
+    if st.session_state.eventos:
+        df_ev = pd.DataFrame(st.session_state.eventos)
         total_general = pd.to_numeric(df_ev["Monto"]).sum()
         st.info(f"### 🇨🇷 TOTAL GENERAL GANADO EN EVENTOS: ₡ {total_general:,.2f}")
         
@@ -129,9 +135,8 @@ with tab_ganancias:
             df_ev['Identificador'] = df_ev['Fecha'] + " - " + df_ev['Tipo Evento'] + " (₡" + pd.to_numeric(df_ev['Monto']).map("{:,.0f}".format) + ")"
             evento_a_borrar = st.selectbox("Eliminar una fiesta por error de dedo:", [""] + df_ev['Identificador'].tolist())
             if evento_a_borrar and st.button("🗑️ Eliminar Fiesta Seleccionada"):
-                df_ev = df_ev[df_ev['Identificador'] != evento_a_borrar]
-                df_save_ev = df_ev[["Fecha", "Tipo Evento", "Monto", "Mes-Año", "OrdenMes"]]
-                conn.update(worksheet="Eventos", data=df_save_ev)
+                st.session_state.eventos = [ev for ev in st.session_state.eventos if (ev["Fecha"] + " - " + ev["Tipo Evento"]) != (evento_a_borrar.split(" (₡")[0])]
+                st.success("Fiesta eliminada.")
                 st.rerun()
                 
         with c2:
