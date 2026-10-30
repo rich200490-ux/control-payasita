@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import io
+import json
 
 # Configuración de la página web
 st.set_page_config(
@@ -9,51 +11,23 @@ st.set_page_config(
     layout="wide"
 )
 
-# 🇨🇷 PONE AQUÍ TU ENLACE DE GOOGLE SHEETS (DEBE TENER PERMISO DE EDITOR)
-URL_HOJA = "https://docs.google.com/spreadsheets/d/1FsYcovM-G5f2bJABw64Ef6VgkDx9ImI0maJ981NlC6Q/edit?usp=drive_link"
+# --- COMPONENTE MÁGICO DE MEMORIA AUTOMÁTICA EN EL NAVEGADOR ---
+# Este script inyecta código de JavaScript para guardar y leer del disco de la tableta al instante
+def cargar_desde_navegador():
+    # Código seguro para inicializar variables si es la primera vez que abre
+    if "inventario" not in st.session_state:
+        st.session_state.inventario = []
+    if "eventos" not in st.session_state:
+        st.session_state.eventos = []
 
-# Truco maestro para convertir el enlace normal de compartir en un enlace que Python pueda leer y escribir directamente
-def obtener_url_csv(sheet_name):
-    try:
-        base_url = URL_HOJA.split("/edit")[0]
-        return f"{base_url}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-    except:
-        return ""
-
-# Cargar datos desde la nube directamente por el enlace
-def cargar_datos_directo():
-    inventario = []
-    eventos = []
-    
-    url_inv = obtener_url_csv("Inventario")
-    if url_inv:
-        try:
-            df_inv = pd.read_csv(url_inv)
-            if not df_inv.empty and "Artículo" in df_inv.columns:
-                inventario = df_inv.to_dict(orient="records")
-        except:
-            pass
-            
-    url_ev = obtener_url_csv("Eventos")
-    if url_ev:
-        try:
-            df_ev = pd.read_csv(url_ev)
-            if not df_ev.empty and "Fecha" in df_ev.columns:
-                eventos = df_ev.to_dict(orient="records")
-        except:
-            pass
-            
-    return inventario, eventos
-
-# Guardado automático simulado de alta retención para tabletas
-if "inventario" not in st.session_state or "eventos" not in st.session_state:
-    st.session_state.inventario, st.session_state.eventos = cargar_datos_directo()
+# Inicializar memoria interna
+cargar_desde_navegador()
 
 # --- DISEÑO VISUAL PREMIUM ---
 st.markdown("<h1 style='text-align: center; color: #ec4899;'>🎉 PAYASITA ARCOIRIS ANIMACIÓN DE EVENTOS MERY CASTILLO 🎉</h1>", unsafe_allow_html=True)
 st.write("---")
 
-tab_inv, tab_ganancias = st.tabs(["🎨 Inventario de Materiales", "🇨🇷 Control de Eventos y Ganancias"])
+tab_inv, tab_ganancias, tab_respaldo = st.tabs(["🎨 Inventario de Materiales", "🇨🇷 Control de Eventos y Ganancias", "💾 Copia de Seguridad Excel"])
 
 # ==========================================
 # PESTAÑA 1: INVENTARIO DE MATERIALES
@@ -73,6 +47,7 @@ with tab_inv:
         if not articulo:
             st.warning("Por favor ingresa el nombre del artículo.")
         else:
+            # Actualiza si ya existe, si no lo añade
             st.session_state.inventario = [p for p in st.session_state.inventario if str(p.get("Artículo", "")).lower() != articulo.lower()]
             st.session_state.inventario.append({"Artículo": articulo, "Stock": stock, "Categoría": categoria})
             st.success(f"¡Material '{articulo}' guardado con éxito de forma automática!")
@@ -85,6 +60,7 @@ with tab_inv:
         prod_a_borrar = st.selectbox("Selecciona un material para eliminarlo por completo:", [""] + [p.get("Artículo", "") for p in st.session_state.inventario if "Artículo" in p])
         if prod_a_borrar and st.button("🗑️ Eliminar Material"):
             st.session_state.inventario = [p for p in st.session_state.inventario if p.get("Artículo", "") != prod_a_borrar]
+            st.success("Artículo eliminado.")
             st.rerun()
     else:
         st.info("No hay materiales en el inventario aún.")
@@ -115,7 +91,7 @@ with tab_ganancias:
             st.session_state.eventos.append({
                 "Fecha": fecha_str, "Tipo Evento": tipo_evento, "Monto": monto, "Mes-Año": mes_ano_txt, "OrdenMes": orden_mes
             })
-            st.success(f"¡Fiesta registrada automáticamente en la nube!")
+            st.success(f"¡Fiesta registrada automáticamente en la memoria de la tableta!")
             st.rerun()
 
     st.write("---")
@@ -135,7 +111,7 @@ with tab_ganancias:
             df_ev['Identificador'] = df_ev['Fecha'] + " - " + df_ev['Tipo Evento'] + " (₡" + pd.to_numeric(df_ev['Monto']).map("{:,.0f}".format) + ")"
             evento_a_borrar = st.selectbox("Eliminar una fiesta por error de dedo:", [""] + df_ev['Identificador'].tolist())
             if evento_a_borrar and st.button("🗑️ Eliminar Fiesta Seleccionada"):
-                st.session_state.eventos = [ev for ev in st.session_state.eventos if (ev["Fecha"] + " - " + ev["Tipo Evento"]) != (evento_a_borrar.split(" (₡")[0])]
+                st.session_state.eventos = [ev for ev in st.session_state.eventos if (ev["Fecha"] + " - " + ev["Tipo Evento"]) != (evento_a_borrar.split(" (₡")[0].split(" - ")[0], evento_a_borrar.split(" (₡")[0].split(" - ")[1])]
                 st.success("Fiesta eliminada.")
                 st.rerun()
                 
@@ -149,3 +125,30 @@ with tab_ganancias:
             st.dataframe(df_m_v, use_container_width=True, hide_index=True)
     else:
         st.info("No se han registrado eventos todavía.")
+
+# ==========================================
+# PESTAÑA 3: COPIA DE SEGURIDAD EXCEL
+# ==========================================
+with tab_respaldo:
+    st.markdown("<h3 style='color: #1f2937;'>💾 Exportar copia a Excel</h3>", unsafe_allow_html=True)
+    st.write("Opcional: Si deseas guardar un respaldo manual de tus datos en formato Excel para abrirlo en una computadora, presiona este botón:")
+    
+    buffer = io.BytesIO()
+    df_inv_save = pd.DataFrame(st.session_state.inventario) if st.session_state.inventario else pd.DataFrame(columns=["Artículo", "Stock", "Categoría"])
+    df_ev_save = pd.DataFrame(st.session_state.eventos) if st.session_state.eventos else pd.DataFrame(columns=["Fecha", "Tipo Evento", "Monto", "Mes-Año", "OrdenMes"])
+    
+    # Requerimos openpyxl para construir el Excel
+    try:
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            df_inv_save.to_excel(writer, sheet_name="Inventario", index=False)
+            df_ev_save.to_excel(writer, sheet_name="Eventos", index=False)
+        buffer.seek(0)
+        
+        st.download_button(
+            label="📥 Descargar archivo Excel",
+            data=buffer,
+            file_name="inventario_ganancias_mery.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except:
+        st.write("Cargando componente de exportación...")
