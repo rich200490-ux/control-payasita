@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializar los almacenes de datos internos y seguros en el navegador
+# Inicializar los almacenes de datos internos en la sesión si no existen
 if "inventario" not in st.session_state:
     st.session_state.inventario = []
 if "eventos" not in st.session_state:
@@ -21,7 +21,7 @@ st.markdown("<h1 style='text-align: center; color: #ec4899;'>🎉 PAYASITA ARCOI
 st.write("---")
 
 # Crear las pestañas en la página web
-tab_inv, tab_ganancias, tab_respaldo = st.tabs(["🎨 Inventario de Materiales", "🇨🇷 Control de Eventos y Ganancias", "💾 Respaldar Datos"])
+tab_inv, tab_ganancias, tab_respaldo = st.tabs(["🎨 Inventario de Materiales", "🇨🇷 Control de Eventos y Ganancias", "💾 Cargar / Respaldar Datos"])
 
 # ==========================================
 # PESTAÑA 1: INVENTARIO DE MATERIALES
@@ -41,7 +41,6 @@ with tab_inv:
         if not articulo:
             st.warning("Por favor ingresa el nombre del artículo.")
         else:
-            # Reemplazar si el artículo ya existe para actualizar stock
             st.session_state.inventario = [p for p in st.session_state.inventario if p.get("Artículo", "").lower() != articulo.lower()]
             st.session_state.inventario.append({"Artículo": articulo, "Stock": stock, "Categoría": categoria})
             st.success(f"¡Material '{articulo}' guardado con éxito!")
@@ -60,7 +59,7 @@ with tab_inv:
             st.success(f"'{prod_a_borrar}' eliminado.")
             st.rerun()
     else:
-        st.info("No hay materiales registrados en el inventario aún.")
+        st.info("No hay materiales registrados. Si ya tienes un respaldo, ve a la pestaña 'Cargar / Respaldar Datos' para subirlo.")
 
 # ==========================================
 # PESTAÑA 2: EVENTOS Y GANANCIAS (COLONES)
@@ -92,7 +91,7 @@ with tab_ganancias:
                 "Mes-Año": mes_ano_txt,
                 "OrdenMes": orden_mes
             })
-            st.success(f"¡Fiesta registrada con éxito para {mes_ano_txt}!")
+            st.success(f"¡Fiesta registrada con éxito!")
             st.rerun()
 
     st.write("---")
@@ -101,7 +100,6 @@ with tab_ganancias:
         df_ev = pd.DataFrame(st.session_state.eventos)
         total_general = df_ev["Monto"].sum()
         
-        # Cuadro visual destacado para las ganancias totales
         st.info(f"### 🇨🇷 TOTAL GENERAL GANADO EN EVENTOS: ₡ {total_general:,.2f}")
         
         c1, c2 = st.columns(2)
@@ -116,7 +114,7 @@ with tab_ganancias:
             if evento_a_borrar and st.button("🗑️ Eliminar Fiesta Seleccionada"):
                 idx_borrar = df_ev[df_ev['Identificador'] == evento_a_borrar].index
                 st.session_state.eventos.pop(int(idx_borrar))
-                st.success("Fiesta eliminada correctamente del registro.")
+                st.success("Fiesta eliminada correctamente.")
                 st.rerun()
                 
         with c2:
@@ -127,16 +125,33 @@ with tab_ganancias:
             df_meses_visual["Monto"] = df_meses_visual["Monto"].map("₡{:,.2f}".format)
             st.dataframe(df_meses_visual, use_container_width=True, hide_index=True)
     else:
-        st.info("No se han registrado eventos ni ganancias todavía.")
+        st.info("No hay eventos registrados. Si ya tienes un respaldo, ve a la pestaña 'Cargar / Respaldar Datos' para subirlo.")
 
 # ==========================================
-# PESTAÑA 3: RESPALDAR DATOS EN LA TABLETA
+# PESTAÑA 3: CARGAR / RESPALDAR DATOS
 # ==========================================
 with tab_respaldo:
-    st.markdown("<h3 style='color: #1f2937;'>💾 Guardar y Descargar Base de Datos</h3>", unsafe_allow_html=True)
-    st.write("Para asegurar que la información quede protegida, genera tu archivo de Excel de respaldo en la memoria de tu tableta antes de cerrar la página.")
+    st.markdown("<h3 style='color: #1f2937;'>📂 1. Cargar Lista Anterior</h3>", unsafe_allow_html=True)
+    st.write("¿Cerraste el link o entraste desde otro dispositivo? Sube aquí tu último archivo Excel descargado para recuperar de inmediato todo tu inventario e historial.")
     
-    # Crear archivo Excel en la memoria en tiempo real
+    # Buzón para arrastrar o buscar el archivo de Excel guardado en la tableta
+    archivo_subido = st.file_uploader("Selecciona tu archivo de respaldo (.xlsx):", type=["xlsx"])
+    
+    if archivo_subido is not None:
+        try:
+            with pd.ExcelFile(archivo_subido) as xls:
+                if "Inventario" in xls.sheet_names:
+                    st.session_state.inventario = pd.read_excel(xls, sheet_name="Inventario").to_dict(orient="records")
+                if "Eventos" in xls.sheet_names:
+                    st.session_state.eventos = pd.read_excel(xls, sheet_name="Eventos").to_dict(orient="records")
+            st.success("📥 ¡Respaldo cargado con éxito! Ya puedes revisar tus pestañas de Inventario y Ganancias.")
+        except Exception as e:
+            st.error(f"No se pudo leer el archivo. Asegúrate de subir el archivo correcto. Error: {e}")
+            
+    st.write("---")
+    st.markdown("<h3 style='color: #1f2937;'>💾 2. Guardar y Descargar Lista Actual</h3>", unsafe_allow_html=True)
+    st.write("Antes de cerrar la página de internet, haz clic abajo para descargar y proteger los datos en la memoria de tu tableta.")
+    
     buffer = io.BytesIO()
     df_inv_save = pd.DataFrame(st.session_state.inventario) if st.session_state.inventario else pd.DataFrame(columns=["Artículo", "Stock", "Categoría"])
     df_ev_save = pd.DataFrame(st.session_state.eventos) if st.session_state.eventos else pd.DataFrame(columns=["Fecha", "Tipo Evento", "Monto", "Mes-Año", "OrdenMes"])
