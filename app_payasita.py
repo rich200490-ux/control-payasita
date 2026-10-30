@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import io
 import json
+import requests
+import base64
+from datetime import datetime
 
 # Configuración de la página web
 st.set_page_config(
@@ -11,23 +12,58 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- COMPONENTE MÁGICO DE MEMORIA AUTOMÁTICA EN EL NAVEGADOR ---
-# Este script inyecta código de JavaScript para guardar y leer del disco de la tableta al instante
-def cargar_desde_navegador():
-    # Código seguro para inicializar variables si es la primera vez que abre
-    if "inventario" not in st.session_state:
-        st.session_state.inventario = []
-    if "eventos" not in st.session_state:
-        st.session_state.eventos = []
+# 🛠️ DATOS DE TU CONFIGURACIÓN DE GITHUB (ESCRIBE LOS TUYOS AQUÍ):
+GITHUB_USER = "rich200490-ux"
+GITHUB_REPO = "control-payasita"  # El nombre de tu repositorio en GitHub
 
-# Inicializar memoria interna
-cargar_desde_navegador()
+# Recuperar el token desde los secretos seguros de Streamlit
+TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 
-# --- DISEÑO VISUAL PREMIUM ---
+# Rutas de almacenamiento en tu nube de GitHub
+URL_INV = f"https://github.com{GITHUB_USER}/{GITHUB_REPO}/contents/inventario.json"
+URL_EV = f"https://github.com{GITHUB_USER}/{GITHUB_REPO}/contents/eventos.json"
+
+def leer_de_github(url):
+    if not TOKEN:
+        return [], None
+    headers = {"Authorization": f"token {TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        datos = r.json()
+        contenido = base64.b64decode(datos['content']).decode('utf-8')
+        return json.loads(contenido), datos['sha']
+    return [], None
+
+def guardar_en_github(url, datos_dict, sha):
+    if not TOKEN:
+        return False
+    headers = {"Authorization": f"token {TOKEN}", "Content-Type": "application/json"}
+    contenido_bytes = json.dumps(datos_dict, indent=4).encode('utf-8')
+    contenido_b64 = base64.b64encode(contenido_bytes).decode('utf-8')
+    
+    payload = {
+        "message": "Actualización de datos desde la tableta",
+        "content": contenido_b64
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    r = requests.put(url, headers=headers, data=json.dumps(payload))
+    return r.status_code in [200, 201]
+
+# --- CARGA INICIAL DE DATOS DESDE GITHUB ---
+if "data_cargada" not in st.session_state:
+    st.session_state.inventario, st.session_state.sha_inv = leer_de_github(URL_INV)
+    st.session_state.eventos, st.session_state.sha_ev = leer_de_github(URL_EV)
+    st.session_state.data_cargada = True
+
 st.markdown("<h1 style='text-align: center; color: #ec4899;'>🎉 PAYASITA ARCOIRIS ANIMACIÓN DE EVENTOS MERY CASTILLO 🎉</h1>", unsafe_allow_html=True)
 st.write("---")
 
-tab_inv, tab_ganancias, tab_respaldo = st.tabs(["🎨 Inventario de Materiales", "🇨🇷 Control de Eventos y Ganancias", "💾 Copia de Seguridad Excel"])
+if not TOKEN:
+    st.error("⚠️ Falta configurar la llave de seguridad (Token) en los Secrets de Streamlit. Sigue el Paso 3.")
+
+tab_inv, tab_ganancias = st.tabs(["🎨 Inventario de Materiales", "🇨🇷 Control de Eventos y Ganancias"])
 
 # ==========================================
 # PESTAÑA 1: INVENTARIO DE MATERIALES
@@ -47,23 +83,29 @@ with tab_inv:
         if not articulo:
             st.warning("Por favor ingresa el nombre del artículo.")
         else:
-            # Actualiza si ya existe, si no lo añade
-            st.session_state.inventario = [p for p in st.session_state.inventario if str(p.get("Artículo", "")).lower() != articulo.lower()]
+            st.session_state.inventario = [p for p in st.session_state.inventario if p.get("Artículo", "").lower() != articulo.lower()]
             st.session_state.inventario.append({"Artículo": articulo, "Stock": stock, "Categoría": categoria})
-            st.success(f"¡Material '{articulo}' guardado con éxito de forma automática!")
-            st.rerun()
+            
+            exito = guardar_en_github(URL_INV, st.session_state.inventario, st.session_state.sha_inv)
+            if exito:
+                st.success(f"¡Material '{articulo}' guardado de forma permanente en la nube!")
+                st.session_state.inventario, st.session_state.sha_inv = leer_de_github(URL_INV)
+                st.rerun()
+            else:
+                st.error("Error al guardar en la nube. Revisa los permisos de tu Token.")
 
     st.write("---")
     st.markdown("<h4>📋 Materiales en Existencia</h4>", unsafe_allow_html=True)
     if st.session_state.inventario:
         st.dataframe(pd.DataFrame(st.session_state.inventario), use_container_width=True, hide_index=True)
-        prod_a_borrar = st.selectbox("Selecciona un material para eliminarlo por completo:", [""] + [p.get("Artículo", "") for p in st.session_state.inventario if "Artículo" in p])
+        prod_a_borrar = st.selectbox("Selecciona un material para eliminarlo:", [""] + [p.get("Artículo", "") for p in st.session_state.inventario])
         if prod_a_borrar and st.button("🗑️ Eliminar Material"):
             st.session_state.inventario = [p for p in st.session_state.inventario if p.get("Artículo", "") != prod_a_borrar]
-            st.success("Artículo eliminado.")
+            guardar_en_github(URL_INV, st.session_state.inventario, st.session_state.sha_inv)
+            st.session_state.inventario, st.session_state.sha_inv = leer_de_github(URL_INV)
             st.rerun()
     else:
-        st.info("No hay materiales en el inventario aún.")
+        st.info("No hay materiales en el inventario.")
 
 # ==========================================
 # PESTAÑA 2: EVENTOS Y GANANCIAS (COLONES)
@@ -91,8 +133,14 @@ with tab_ganancias:
             st.session_state.eventos.append({
                 "Fecha": fecha_str, "Tipo Evento": tipo_evento, "Monto": monto, "Mes-Año": mes_ano_txt, "OrdenMes": orden_mes
             })
-            st.success(f"¡Fiesta registrada automáticamente en la memoria de la tableta!")
-            st.rerun()
+            
+            exito = guardar_en_github(URL_EV, st.session_state.eventos, st.session_state.sha_ev)
+            if exito:
+                st.success(f"¡Fiesta guardada permanentemente en la nube!")
+                st.session_state.eventos, st.session_state.sha_ev = leer_de_github(URL_EV)
+                st.rerun()
+            else:
+                st.error("Error al registrar la fiesta.")
 
     st.write("---")
     
@@ -111,7 +159,9 @@ with tab_ganancias:
             df_ev['Identificador'] = df_ev['Fecha'] + " - " + df_ev['Tipo Evento'] + " (₡" + pd.to_numeric(df_ev['Monto']).map("{:,.0f}".format) + ")"
             evento_a_borrar = st.selectbox("Eliminar una fiesta por error de dedo:", [""] + df_ev['Identificador'].tolist())
             if evento_a_borrar and st.button("🗑️ Eliminar Fiesta Seleccionada"):
-                st.session_state.eventos = [ev for ev in st.session_state.eventos if (ev["Fecha"] + " - " + ev["Tipo Evento"]) != (evento_a_borrar.split(" (₡")[0].split(" - ")[0], evento_a_borrar.split(" (₡")[0].split(" - ")[1])]
+                st.session_state.eventos = [ev for ev in st.session_state.eventos if (ev["Fecha"] + " - " + ev["Tipo Evento"]) != (evento_a_borrar.split(" - ")[0], evento_a_borrar.split(" - ")[1].split(" (")[0])]
+                guardar_en_github(URL_EV, st.session_state.eventos, st.session_state.sha_ev)
+                st.session_state.eventos, st.session_state.sha_ev = leer_de_github(URL_EV)
                 st.success("Fiesta eliminada.")
                 st.rerun()
                 
@@ -125,30 +175,3 @@ with tab_ganancias:
             st.dataframe(df_m_v, use_container_width=True, hide_index=True)
     else:
         st.info("No se han registrado eventos todavía.")
-
-# ==========================================
-# PESTAÑA 3: COPIA DE SEGURIDAD EXCEL
-# ==========================================
-with tab_respaldo:
-    st.markdown("<h3 style='color: #1f2937;'>💾 Exportar copia a Excel</h3>", unsafe_allow_html=True)
-    st.write("Opcional: Si deseas guardar un respaldo manual de tus datos en formato Excel para abrirlo en una computadora, presiona este botón:")
-    
-    buffer = io.BytesIO()
-    df_inv_save = pd.DataFrame(st.session_state.inventario) if st.session_state.inventario else pd.DataFrame(columns=["Artículo", "Stock", "Categoría"])
-    df_ev_save = pd.DataFrame(st.session_state.eventos) if st.session_state.eventos else pd.DataFrame(columns=["Fecha", "Tipo Evento", "Monto", "Mes-Año", "OrdenMes"])
-    
-    # Requerimos openpyxl para construir el Excel
-    try:
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            df_inv_save.to_excel(writer, sheet_name="Inventario", index=False)
-            df_ev_save.to_excel(writer, sheet_name="Eventos", index=False)
-        buffer.seek(0)
-        
-        st.download_button(
-            label="📥 Descargar archivo Excel",
-            data=buffer,
-            file_name="inventario_ganancias_mery.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    except:
-        st.write("Cargando componente de exportación...")
