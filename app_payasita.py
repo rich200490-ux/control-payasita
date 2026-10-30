@@ -12,14 +12,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# 🛠️ DATOS DE TU CONFIGURACIÓN DE GITHUB (ESCRIBE LOS TUYOS AQUÍ):
-GITHUB_USER = "@rich200490-ux"
-GITHUB_REPO = "control-payasita"  # El nombre de tu repositorio en GitHub
+# 🛠️ DATOS DE TU CONFIGURACIÓN DE GITHUB (YA CORREGIDOS)
+GITHUB_USER = "rich200490-ux"
+GITHUB_REPO = "control-payasita"  
 
 # Recuperar el token desde los secretos seguros de Streamlit
 TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 
-# Rutas de almacenamiento en tu nube de GitHub (Dirección de API corregida)
+# 🌟 URLs oficiales de la API para que Python pueda escribir los archivos automáticamente
 URL_INV = f"https://github.com{GITHUB_USER}/{GITHUB_REPO}/contents/inventario.json"
 URL_EV = f"https://github.com{GITHUB_USER}/{GITHUB_REPO}/contents/eventos.json"
 
